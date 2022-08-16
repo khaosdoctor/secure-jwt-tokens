@@ -16,5 +16,3 @@ app.use('/site', express.static(path.resolve(__dirname, './frontend'), { cacheCo
 app.use('/api', apiRoutes)
 
 app.listen(3000, () => console.log('JWT example listening on port 3000!'))
-
-// NOTE: Essa ideia de JWT seguro pode virar uma lib que é um middleware do express que faz automaticamente o setup de JWT seguro
