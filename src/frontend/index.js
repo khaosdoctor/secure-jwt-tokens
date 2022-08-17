@@ -1,6 +1,6 @@
 // GLOBAL PROXY
 const tokenSymbol = Symbol.for('accessToken')
-const refreshInternalMinutes = 120 * 60 * 1000
+const refreshIntervalMinutes = 4.5 * 60 * 1000
 let internalToken = new Proxy(
   { [tokenSymbol]: null },
   {
@@ -67,8 +67,8 @@ document.querySelector('#loginForm').addEventListener('submit', async (e) => {
   if (result.status === 200) {
     const response = await result.json()
     internalToken[tokenSymbol] = response.accessToken
-    setInterval(refreshToken, refreshInternalMinutes)
-    updateMessage('Next refresh at ' + new Date(Date.now() + 120 * 60 * 1000).toLocaleTimeString())
+    setInterval(refreshToken, refreshIntervalMinutes)
+    updateMessage('Next refresh at ' + new Date(Date.now() + refreshIntervalMinutes).toLocaleTimeString())
   }
 })
 
