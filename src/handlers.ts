@@ -61,8 +61,7 @@ const createRefreshToken = (user: User, fingerprint: string) => {
     expiresIn: `${process.env.REFRESH_TOKEN_DURATION_MINUTES}m`
   })
 
-  const refreshHash = getRefreshHash(token)
-  refreshTokenDB.set(fingerprint, { username: user.username, hash: refreshHash })
+  refreshTokenDB.set(fingerprint, { username: user.username, hash: getRefreshHash(token) })
 
   setTimeout(() => {
     refreshTokenDB.delete(fingerprint)
