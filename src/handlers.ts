@@ -3,7 +3,7 @@ import { NextFunction, Request, Response, Router } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
 import { User, users } from './users'
 
-interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; refreshHash: string }> {}
+interface ExtendedResponse extends Response<any, { user: Partial<User>; refreshHash: string }> {}
 interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
 
 const refreshTokenDB = new Map<string, string>()
@@ -16,7 +16,6 @@ const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction)
       audience: 'urn:jwt:type:access'
     }) as AccessTokenPayload
 
-    res.locals.token = token
     res.locals.user = { username: sub!, name, age, social }
     next()
   } catch (error) {
