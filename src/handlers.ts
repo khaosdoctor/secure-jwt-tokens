@@ -1,12 +1,12 @@
-import { createHmac } from 'crypto'
+import { createHmac, randomUUID } from 'crypto'
 import { NextFunction, Request, RequestHandler, Response, Router } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
 import { User, users } from './users'
 
-interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; fingerprint: string }> {}
+interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; refreshHash: string }> {}
 interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
 
-const refreshTokenDB = new Map<string, string>()
+const refreshTokenDB = new Map<string, { username: string; hash: string }>()
 
 const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
   const token = req.headers['authorization']?.split('Bearer ')[1]
@@ -26,13 +26,17 @@ const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction)
 
 const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
   const token = req.cookies['refresh-token']
-  if (!token) return res.status(401).send('Unauthorized')
+  const tokenHash = getRefreshHash(token)
+  const cookieFingerprint = req.cookies.fingerprint
+
+  if (!token || !cookieFingerprint) return res.status(401).send('Unauthorized')
   try {
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
+    const { sub } = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
       audience: 'urn:jwt:type:refresh'
     })
-    const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
-    res.locals.fingerprint = fingerprint
+    if (sub !== cookieFingerprint) return res.status(401).send('Unauthorized: figerprint mismatch')
+
+    res.locals.refreshHash = getRefreshHash(token)
     next()
   } catch (error) {
     return res.status(401).send('Unauthorized')
@@ -51,20 +55,21 @@ const createAccessToken = (user: User) => {
   )
 }
 
-const createRefreshToken = (user: User) => {
-  const token = jwt.sign({ sub: user.username }, process.env.ACCESS_TOKEN_SECRET!, {
+const createRefreshToken = (user: User, fingerprint: string) => {
+  const token = jwt.sign({ sub: fingerprint }, process.env.ACCESS_TOKEN_SECRET!, {
     audience: 'urn:jwt:type:refresh',
     issuer: 'urn:system:token-issuer:type:refresh',
     expiresIn: `${process.env.REFRESH_TOKEN_DURATION_MINUTES}m`
   })
-  const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
 
-  refreshTokenDB.set(fingerprint, user.username)
+  const refreshHash = getRefreshHash(token)
+  refreshTokenDB.set(fingerprint, { username: user.username, hash: refreshHash })
+
   setTimeout(() => {
     refreshTokenDB.delete(fingerprint)
     console.log(`Refresh token ${fingerprint} expired`)
     console.table(refreshTokenDB.entries())
-  }, 5 * 60 * 1000)
+  }, 120 * 60 * 1000)
 
   console.table(refreshTokenDB.entries())
   return token
@@ -79,6 +84,17 @@ const setRefreshCookie = (res: ExtendedResponse, token: string) => {
   })
 }
 
+const performTokenGeneration = (user: User, res: ExtendedResponse, fingerprint: string) => {
+  const accessToken = createAccessToken(user)
+  const refreshToken = createRefreshToken(user, fingerprint)
+
+  setRefreshCookie(res, refreshToken)
+  res.json({ accessToken })
+}
+
+const getRefreshHash = (token: string) =>
+  createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+
 const router = Router()
 
 router.post('/login', (req, res: ExtendedResponse) => {
@@ -86,23 +102,25 @@ router.post('/login', (req, res: ExtendedResponse) => {
   const user = users.find((user) => user.username === username && user.password === password)
   if (!user) return res.status(401).send('Unauthorized')
 
-  const accessToken = createAccessToken(user)
-  const refreshToken = createRefreshToken(user)
+  const fingerprint = randomUUID()
+  res.cookie('fingerprint', fingerprint, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    maxAge: Number(process.env.REFRESH_TOKEN_DURATION_MINUTES) * 60 * 1000
+  })
 
-  setRefreshCookie(res, refreshToken)
-  res.json({ accessToken })
+  performTokenGeneration(user, res, fingerprint)
 })
 
-router.post('/refresh', withRefreshAuth, (_, res) => {
-  const username = refreshTokenDB.get(res.locals.fingerprint)
-  const user = users.find((user) => user.username === username)
-  if (!username || !user) return res.status(403).send('Could not find user for this refresh token')
+router.post('/refresh', withRefreshAuth, (req, res) => {
+  const fingerprint = req.cookies.fingerprint
+  const session = refreshTokenDB.get(fingerprint)
+  if (res.locals.refreshHash !== session?.hash) return res.status(401).send('Unauthorized: refresh hash mismatch')
 
-  const accessToken = createAccessToken(user)
-  const refreshToken = createRefreshToken(user)
-
-  setRefreshCookie(res, refreshToken)
-  res.json({ accessToken })
+  const user = users.find((user) => user.username === session?.username)
+  if (!session || !user) return res.status(403).send('Could not find user for this refresh token')
+  performTokenGeneration(user, res, fingerprint)
 })
 
 router.get('/users/:username', withAccessAuth, (req, res) => {

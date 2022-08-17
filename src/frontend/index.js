@@ -1,5 +1,6 @@
 // GLOBAL PROXY
 const tokenSymbol = Symbol.for('accessToken')
+const refreshInternalMinutes = 120 * 60 * 1000
 let internalToken = new Proxy(
   { [tokenSymbol]: null },
   {
@@ -38,13 +39,13 @@ function refreshToken() {
   fetch('/api/refresh', {
     method: 'POST'
   })
-    .then((res) => res.json())
+    .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
     .then(({ accessToken }) => {
       internalToken[tokenSymbol] = accessToken
-      updateMessage(
-        'Refreshing token every 4.5 minutes. Next refresh at ' +
-          new Date(Date.now() + 4.5 * 60 * 1000).toLocaleTimeString()
-      )
+      updateMessage('Next refresh at ' + new Date(Date.now() + refreshInternalMinutes).toLocaleTimeString())
+    })
+    .catch((err) => {
+      updateMessage('Error refreshing token: ' + err)
     })
 }
 
@@ -66,11 +67,8 @@ document.querySelector('#loginForm').addEventListener('submit', async (e) => {
   if (result.status === 200) {
     const response = await result.json()
     internalToken[tokenSymbol] = response.accessToken
-    setInterval(refreshToken, 4.5 * 60 * 1000)
-    updateMessage(
-      'Refreshing token every 4.5 minutes. Next refresh at ' +
-        new Date(Date.now() + 4.5 * 60 * 1000).toLocaleTimeString()
-    )
+    setInterval(refreshToken, refreshInternalMinutes)
+    updateMessage('Next refresh at ' + new Date(Date.now() + 120 * 60 * 1000).toLocaleTimeString())
   }
 })
 
