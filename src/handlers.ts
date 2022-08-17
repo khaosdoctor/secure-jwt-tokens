@@ -1,10 +1,12 @@
+import { createHmac } from 'crypto'
 import { NextFunction, Request, RequestHandler, Response, Router } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
 import { User, users } from './users'
 
-interface ExtendedResponse extends Response<any, { token: string; user: Partial<User> }> {}
+interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; fingerprint: string }> {}
+interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
 
-export interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
+const refreshTokenDB = new Map<string, string>()
 
 const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
   const token = req.headers['authorization']?.split('Bearer ')[1]
@@ -24,13 +26,13 @@ const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction)
 
 const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
   const token = req.cookies['refresh-token']
-  console.table(req.cookies)
   if (!token) return res.status(401).send('Unauthorized')
   try {
-    const { sub } = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
       audience: 'urn:jwt:type:refresh'
     })
-    res.locals.user = { username: sub as string }
+    const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+    res.locals.fingerprint = fingerprint
     next()
   } catch (error) {
     return res.status(401).send('Unauthorized')
@@ -50,11 +52,20 @@ const createAccessToken = (user: User) => {
 }
 
 const createRefreshToken = (user: User) => {
-  return jwt.sign({ sub: user.username }, process.env.ACCESS_TOKEN_SECRET!, {
+  const token = jwt.sign({ sub: user.username }, process.env.ACCESS_TOKEN_SECRET!, {
     audience: 'urn:jwt:type:refresh',
     issuer: 'urn:system:token-issuer:type:refresh',
     expiresIn: `${process.env.REFRESH_TOKEN_DURATION_MINUTES}m`
   })
+  const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+  refreshTokenDB.set(fingerprint, user.username)
+  setTimeout(() => {
+    refreshTokenDB.delete(fingerprint)
+    console.log(`Refresh token ${fingerprint} expired`)
+    console.table(refreshTokenDB.entries())
+  }, 5 * 60 * 1000)
+  console.table(refreshTokenDB.entries())
+  return token
 }
 
 const router = Router()
@@ -72,8 +83,9 @@ router.post('/login', (req, res) => {
 })
 
 router.post('/refresh', withRefreshAuth, (_, res) => {
-  const user = users.find((user) => user.username === res.locals.user.username)
-  if (!user) return res.status(403).send('Could not find user for this refresh token')
+  const username = refreshTokenDB.get(res.locals.fingerprint)
+  const user = users.find((user) => user.username === username)
+  if (!username || !user) return res.status(403).send('Could not find user for this refresh token')
 
   const accessToken = createAccessToken(user)
   const refreshToken = createRefreshToken(user)
