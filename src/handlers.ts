@@ -58,12 +58,14 @@ const createRefreshToken = (user: User) => {
     expiresIn: `${process.env.REFRESH_TOKEN_DURATION_MINUTES}m`
   })
   const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+
   refreshTokenDB.set(fingerprint, user.username)
   setTimeout(() => {
     refreshTokenDB.delete(fingerprint)
     console.log(`Refresh token ${fingerprint} expired`)
     console.table(refreshTokenDB.entries())
   }, 5 * 60 * 1000)
+
   console.table(refreshTokenDB.entries())
   return token
 }
