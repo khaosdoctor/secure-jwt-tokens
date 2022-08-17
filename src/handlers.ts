@@ -1,9 +1,9 @@
 import { createHmac } from 'crypto'
-import { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import { NextFunction, Request, Response, Router } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
 import { User, users } from './users'
 
-interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; fingerprint: string }> {}
+interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; refreshHash: string }> {}
 interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
 
 const refreshTokenDB = new Map<string, string>()
@@ -31,8 +31,8 @@ const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
       audience: 'urn:jwt:type:refresh'
     })
-    const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
-    res.locals.fingerprint = fingerprint
+    const tokenHash = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+    res.locals.refreshHash = tokenHash
     next()
   } catch (error) {
     return res.status(401).send('Unauthorized')
@@ -57,12 +57,12 @@ const createRefreshToken = (user: User) => {
     issuer: 'urn:system:token-issuer:type:refresh',
     expiresIn: `${process.env.REFRESH_TOKEN_DURATION_MINUTES}m`
   })
-  const fingerprint = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+  const tokenHash = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
 
-  refreshTokenDB.set(fingerprint, user.username)
+  refreshTokenDB.set(tokenHash, user.username)
   setTimeout(() => {
-    refreshTokenDB.delete(fingerprint)
-    console.log(`Refresh token ${fingerprint} expired`)
+    refreshTokenDB.delete(tokenHash)
+    console.log(`Refresh token ${tokenHash} expired`)
     console.table(refreshTokenDB.entries())
   }, 5 * 60 * 1000)
 
@@ -94,7 +94,7 @@ router.post('/login', (req, res: ExtendedResponse) => {
 })
 
 router.post('/refresh', withRefreshAuth, (_, res) => {
-  const username = refreshTokenDB.get(res.locals.fingerprint)
+  const username = refreshTokenDB.get(res.locals.refreshHash)
   const user = users.find((user) => user.username === username)
   if (!username || !user) return res.status(403).send('Could not find user for this refresh token')
 
