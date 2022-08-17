@@ -1,7 +1,7 @@
 // GLOBAL PROXY
 const tokenSymbol = Symbol.for('accessToken')
 const refreshIntervalMinutes = 4.5 * 60 * 1000
-let internalToken = new Proxy(
+const internalToken = new Proxy(
   { [tokenSymbol]: null },
   {
     get(target, prop) {
