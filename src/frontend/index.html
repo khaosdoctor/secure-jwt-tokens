@@ -17,11 +17,12 @@
     <div class="container">
       <div class="row align-items-center">
         <div class="col text-center">
-          <form id="loginForm">
+          <form id="loginForm" class="input-group mb-3">
             <input
               required
               type="text"
               name="username"
+              class="form-control"
               autocomplete="username"
               placeholder="Username"
               value="lsantosdev"
@@ -29,12 +30,13 @@
             <input
               required
               type="password"
+              class="form-control"
               autocomplete="current-password"
               name="password"
               placeholder="Password"
               value="123456"
             />
-            <input id="loginAction" type="submit" value="Login" />
+            <input id="loginAction" class="btn btn-dark" type="submit" value="Login" />
           </form>
         </div>
         <div class="col text-left">
@@ -52,6 +54,10 @@
       <div class="row align-items-center">
         <div class="col-6 text-center"><strong>Decoded access token</strong></div>
         <div class="col-6 text-center"><pre id="decodedToken"></pre></div>
+      </div>
+
+      <div class="row align-items-center mt-5 mb-5">
+        <div class="col-12 text-center"><button type="button" class="btn btn-primary" id="refreshAction" disabled>Force token Refresh</button></div>
       </div>
 
       <div class="row align-items-center">

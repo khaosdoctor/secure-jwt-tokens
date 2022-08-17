@@ -18,6 +18,7 @@ Object.defineProperty(document, 'accessToken', {
       null,
       2
     )}<br> <b>Expires at ${new Date(payload.exp * 1000).toLocaleTimeString()}</b>`
+    document.querySelector('#refreshAction').disabled = false
 
     document[accessSymbol] = v
     return v
@@ -93,3 +94,5 @@ document.querySelector('#userForm').addEventListener('submit', async (e) => {
     updateMessage(JSON.stringify(response, null, 2), '.user-result')
   }
 })
+
+document.querySelector('#refreshAction').addEventListener('click', refreshToken)
