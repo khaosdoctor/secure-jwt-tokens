@@ -1,9 +1,9 @@
 import { createHmac, randomUUID } from 'crypto'
-import { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import { NextFunction, Request, Response, Router } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
 import { User, users } from './users'
 
-interface ExtendedResponse extends Response<any, { token: string; user: Partial<User>; refreshHash: string }> {}
+interface ExtendedResponse extends Response<any, { user: Partial<User>; refreshHash: string }> {}
 interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'password'> {}
 
 const refreshTokenDB = new Map<string, { username: string; hash: string }>()
@@ -16,7 +16,6 @@ const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction)
       audience: 'urn:jwt:type:access'
     }) as AccessTokenPayload
 
-    res.locals.token = token
     res.locals.user = { username: sub!, name, age, social }
     next()
   } catch (error) {
@@ -33,9 +32,8 @@ const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction
     const { sub } = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
       audience: 'urn:jwt:type:refresh'
     })
-    if (sub !== cookieFingerprint) return res.status(401).send('Unauthorized: figerprint mismatch')
-
-    res.locals.refreshHash = getRefreshHash(token)
+    const tokenHash = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+    res.locals.refreshHash = tokenHash
     next()
   } catch (error) {
     return res.status(401).send('Unauthorized')
