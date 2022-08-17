@@ -26,7 +26,6 @@ const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction)
 
 const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
   const token = req.cookies['refresh-token']
-  const tokenHash = getRefreshHash(token)
   const cookieFingerprint = req.cookies.fingerprint
 
   if (!token || !cookieFingerprint) return res.status(401).send('Unauthorized')
