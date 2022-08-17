@@ -70,9 +70,18 @@ const createRefreshToken = (user: User) => {
   return token
 }
 
+const setRefreshCookie = (res: ExtendedResponse, token: string) => {
+  res.cookie('refresh-token', token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    expires: new Date(Date.now() + Number(process.env.REFRESH_TOKEN_DURATION_MINUTES) * 60 * 1000)
+  })
+}
+
 const router = Router()
 
-router.post('/login', (req, res) => {
+router.post('/login', (req, res: ExtendedResponse) => {
   const { username, password } = req.body
   const user = users.find((user) => user.username === username && user.password === password)
   if (!user) return res.status(401).send('Unauthorized')
@@ -80,7 +89,7 @@ router.post('/login', (req, res) => {
   const accessToken = createAccessToken(user)
   const refreshToken = createRefreshToken(user)
 
-  res.cookie('refresh-token', refreshToken, { httpOnly: true, secure: true, sameSite: 'strict' })
+  setRefreshCookie(res, refreshToken)
   res.json({ accessToken })
 })
 
@@ -92,7 +101,7 @@ router.post('/refresh', withRefreshAuth, (_, res) => {
   const accessToken = createAccessToken(user)
   const refreshToken = createRefreshToken(user)
 
-  res.cookie('refresh-token', refreshToken, { httpOnly: true, secure: true, sameSite: 'strict' })
+  setRefreshCookie(res, refreshToken)
   res.json({ accessToken })
 })
 
