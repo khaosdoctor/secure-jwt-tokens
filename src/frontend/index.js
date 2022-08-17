@@ -42,7 +42,7 @@ function refreshToken() {
     .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
     .then(({ accessToken }) => {
       internalToken[tokenSymbol] = accessToken
-      updateMessage('Next refresh at ' + new Date(Date.now() + refreshInternalMinutes).toLocaleTimeString())
+      updateMessage('Next refresh at ' + new Date(Date.now() + refreshIntervalMinutes).toLocaleTimeString())
     })
     .catch((err) => {
       updateMessage('Error refreshing token: ' + err)
