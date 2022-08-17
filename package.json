@@ -10,7 +10,7 @@
   },
   "keywords": [],
   "author": "Lucas Santos <hello@lsantos.dev> (https://lsantos.dev/)",
-  "license": "GPL-3.0",
+  "license": "MIT",
   "dependencies": {
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.0.1",
