@@ -8,36 +8,9 @@ interface AccessTokenPayload extends JwtPayload, Omit<User, 'username' | 'passwo
 
 const refreshTokenDB = new Map<string, string>()
 
-const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
-  const token = req.headers['authorization']?.split('Bearer ')[1]
-  if (!token) return res.status(401).send('Unauthorized')
-  try {
-    const { sub, name, age, social } = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
-      audience: 'urn:jwt:type:access'
-    }) as AccessTokenPayload
-
-    res.locals.user = { username: sub!, name, age, social }
-    next()
-  } catch (error) {
-    return res.status(401).send('Unauthorized')
-  }
-}
-
-const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
-  const token = req.cookies['refresh-token']
-  if (!token) return res.status(401).send('Unauthorized')
-  try {
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
-      audience: 'urn:jwt:type:refresh'
-    })
-    const tokenHash = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
-    res.locals.refreshHash = tokenHash
-    next()
-  } catch (error) {
-    return res.status(401).send('Unauthorized')
-  }
-}
-
+/**
+ * UTILITY FUNCTIONS
+ */
 const createAccessToken = (user: User) => {
   return jwt.sign(
     { sub: user.username, name: user.name, age: user.age, social: user.social },
@@ -78,6 +51,42 @@ const setRefreshCookie = (res: ExtendedResponse, token: string) => {
   })
 }
 
+/**
+ * MIDDLEWARES
+ */
+const withAccessAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
+  const token = req.headers['authorization']?.split('Bearer ')[1]
+  if (!token) return res.status(401).send('Unauthorized')
+  try {
+    const { sub, name, age, social } = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
+      audience: 'urn:jwt:type:access'
+    }) as AccessTokenPayload
+
+    res.locals.user = { username: sub!, name, age, social }
+    next()
+  } catch (error) {
+    return res.status(401).send('Unauthorized')
+  }
+}
+
+const withRefreshAuth = (req: Request, res: ExtendedResponse, next: NextFunction) => {
+  const token = req.cookies['refresh-token']
+  if (!token) return res.status(401).send('Unauthorized')
+  try {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, {
+      audience: 'urn:jwt:type:refresh'
+    })
+    const tokenHash = createHmac('sha512', process.env.REFRESH_TOKEN_SECRET!).update(token).digest('hex')
+    res.locals.refreshHash = tokenHash
+    next()
+  } catch (error) {
+    return res.status(401).send('Unauthorized')
+  }
+}
+
+/**
+ * ROUTES
+ */
 const router = Router()
 
 router.post('/login', (req, res: ExtendedResponse) => {
